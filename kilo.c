@@ -1,22 +1,15 @@
-#include <ctype.h>
-#include <stdio.h>
 #include "rawMode.h"
-#include "errorHandler.h"
+#include "editor.h"
+#include "input.h"
+#include "output.h"
 
-int main() {
+int main(void) {
     enableRawMode();
+    initEditor();
 
     while (1) {
-        char c = '\0';
-        safe_read(STDIN_FILENO, &c, 1);
-        
-        if (iscntrl(c))
-            printf("%d\r\n", c);
-        else
-            printf("%d ('%c')\r\n", c, c);
-
-        if (c == 'q')
-            break;
+        editorRefreshScreen();
+        editorProcessKeypress();
     }
     
     return 0;

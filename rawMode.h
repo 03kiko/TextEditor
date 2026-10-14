@@ -1,8 +1,7 @@
-#ifndef _RAW_MODE_H_
-#define _RAW_MODE_H_
+#ifndef _RAW_MODE_H
+#define _RAW_MODE_H
 
-#include <termios.h>
-
-void enableRawMode();
+void enableRawMode(void);
+int getWindowSize(int *rows, int *cols);
 
 #endif
