@@ -1,5 +1,5 @@
-#ifndef _RAW_MODE_H
-#define _RAW_MODE_H
+#ifndef RAW_MODE_H
+#define RAW_MODE_H
 
 void enableRawMode(void);
 int getWindowSize(int *rows, int *cols);

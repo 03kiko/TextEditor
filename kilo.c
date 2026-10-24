@@ -2,11 +2,16 @@
 #include "editor.h"
 #include "input.h"
 #include "output.h"
+#include "fileio.h"
 
-int main(void) {
+int main(int argc, char *argv[]) {
     enableRawMode();
     initEditor();
+    if (argc >= 2)
+        editorOpen(argv[1]);
 
+    editorSetStatusMessage("HELP: Ctrl-Q = quit");
+    
     while (1) {
         editorRefreshScreen();
         editorProcessKeypress();

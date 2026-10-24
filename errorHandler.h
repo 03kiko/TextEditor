@@ -1,7 +1,6 @@
-#ifndef _ERROR_HANDLER_H
-#define _ERROR_HANDLER_H
+#ifndef ERROR_HANDLER_H
+#define ERROR_HANDLER_H
 
-#include <stddef.h>
 #include <sys/types.h>
 #include <termios.h>
 

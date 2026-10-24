@@ -11,8 +11,8 @@
  * @param s The string to output with perror before exiting.
  */
 void die(const char* s) {
-    safe_write(STDOUT_FILENO, "\x1b[2J", 4);
-    safe_write(STDOUT_FILENO, "\x1b[H", 3);
+    write(STDOUT_FILENO, "\x1b[2J", 4);
+    write(STDOUT_FILENO, "\x1b[H", 3);
 
     perror(s);
     exit(1);
@@ -21,12 +21,11 @@ void die(const char* s) {
 /* Wrapper around read() with error handling */
 ssize_t safe_read(int fd, void* buf, size_t count) {
     ssize_t result;
-    do
-    {
+    do {
         result = read(fd, buf, count);
-    } while (result != -1 && errno == EINTR);
+    } while (result == -1 && errno == EINTR);
     
-    if (result == -1 && errno != EAGAIN)
+    if (result == -1 && errno != EAGAIN && errno != EWOULDBLOCK)
         die("read");
 
     return result;
