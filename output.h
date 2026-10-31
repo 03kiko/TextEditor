@@ -2,6 +2,6 @@
 #define OUTPUT_H
 
 void editorRefreshScreen(void);
-void editorSetStatusMessage(const char* fmt, ...);
+void editorSetStatusMessage(const char *fmt, ...);
 
 #endif

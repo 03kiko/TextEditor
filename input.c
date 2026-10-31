@@ -1,26 +1,33 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <unistd.h>
-#include "input.h"
+#include <ctype.h>
+
+#include "textOps.h"
 #include "errorHandler.h"
 #include "editor.h"
+#include "fileio.h"
+#include "output.h"
+#include "input.h"
+
+#define KILO_QUIT_TIMES 3
 
 // mirrors what the Ctrl key does in the terminal: it strips bits 5 and 6 from
 // whatever key you press in combination with Ctrl
 #define CTRL_KEY(k) ((k) & 0x1f) 
 
 enum editorKey {
-  ARROW_LEFT = 1000,
-  ARROW_RIGHT,
-  ARROW_UP,
-  ARROW_DOWN,
-  HOME_KEY,
-  END_KEY,
-  DEL_KEY,
-  PAGE_UP,
-  PAGE_DOWN
+    BACKSPACE = 127,
+    ARROW_LEFT = 1000,
+    ARROW_RIGHT,
+    ARROW_UP,
+    ARROW_DOWN,
+    HOME_KEY,
+    END_KEY,
+    DEL_KEY,
+    PAGE_UP,
+    PAGE_DOWN
 };
-
 
 static void editorMoveCursor(int key) {
     struct erow *row = (E.cy >= E.numrows) ? NULL : &E.row[E.cy];
@@ -60,7 +67,7 @@ static void editorMoveCursor(int key) {
 }
 
 
-static int editorReadKey() {
+static int editorReadKey(void) {
     ssize_t nread;
     char c;
 
@@ -125,22 +132,86 @@ static int editorReadKey() {
     return c;
 }
 
+char *editorPrompt(const char *prompt) {
+    size_t bufsize = 128;
+    char *buf = malloc(bufsize);
+    if (buf == NULL)
+        die("malloc");
+    
+    size_t buflen = 0;
+    buf[0] = '\0';
+
+    while (1) {
+        editorSetStatusMessage(prompt, buf);
+        editorRefreshScreen();
+
+        int c = editorReadKey();
+        if (c == DEL_KEY || c == CTRL_KEY('h') || c == BACKSPACE) {
+            if (buflen != 0)
+                buf[--buflen] = '\0';
+        } else if (c == '\x1b') {
+            editorSetStatusMessage("");
+            free(buf);
+            return NULL;
+        } else if (c == '\r') {
+            if (buflen != 0) {
+                editorSetStatusMessage("");
+                return buf;
+            }
+        } else if (!iscntrl((unsigned char)c) && c < 128) {
+            if (buflen == bufsize - 1) {
+                bufsize *= 2;
+                char *new_buf = realloc(buf, bufsize);
+                if (new_buf == NULL)
+                    die("realloc");
+                buf = new_buf;
+            }
+            buf[buflen++] = c;
+            buf[buflen] = '\0';
+        }
+    }
+}
+
 void editorProcessKeypress(void) {
+    static int quit_times = KILO_QUIT_TIMES;
     int c = editorReadKey();
 
     switch (c) {
+        case '\r':
+            editorInsertNewLine();
+            break;
+
         case CTRL_KEY('q'):
+            if (E.dirty && quit_times > 0) {
+                editorSetStatusMessage("WARNING!! File has unsaved changes. "
+                    "Press Ctrl-Q %d more times to quit.", quit_times);
+                quit_times--;
+                return;
+            }
             safe_write(STDOUT_FILENO, "\x1b[2J", 4);
             safe_write(STDOUT_FILENO, "\x1b[H", 3);
             exit(0);
             break;
         
+        case CTRL_KEY('s'):
+            editorSave();
+            break;
+        
         case HOME_KEY:
             E.cx= 0;
             break;
+
         case END_KEY:
             if (E.cy < E.numrows)
                 E.cx = E.row[E.cy].size;
+            break;
+        
+        case BACKSPACE:
+        case CTRL_KEY('h'):
+        case DEL_KEY:
+            if (c == DEL_KEY)
+                editorMoveCursor(ARROW_RIGHT);
+            editorDelChar();
             break;
         
         case PAGE_UP:
@@ -166,6 +237,15 @@ void editorProcessKeypress(void) {
         case ARROW_RIGHT:
             editorMoveCursor(c);
             break;
-    
+        
+        case CTRL_KEY('l'):
+        case '\x1b':
+            break;
+        
+        default:
+            editorInsertChar(c);
+            break;
     }
+
+    quit_times = KILO_QUIT_TIMES;
 }

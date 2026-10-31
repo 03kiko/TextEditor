@@ -38,7 +38,7 @@ void enableRawMode(void) {
     safe_tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw); // Apply modified attributes
 }
 
-int getCursorPosition(int *rows, int *cols) {
+static int getCursorPosition(int *rows, int *cols) {
     char buf[32];
     unsigned int i = 0;
 
@@ -67,8 +67,7 @@ int getWindowSize(int *rows, int *cols) {
 
     if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
         // fallback by putting curor at the end and get cords
-        if (write(STDOUT_FILENO, "\x1b[999C\x1b[999B", 12) != 12)
-            return -1;
+        safe_write(STDOUT_FILENO, "\x1b[999C\x1b[999B", 12);
         if (getCursorPosition(rows, cols) == -1)
             return -1;
     

@@ -91,12 +91,23 @@ static void editorDrawRows(abuf *ab) {
 static void editorDrawStatusBar(abuf *ab) {
     abAppend(ab, "\x1b[7m", 4);
     char status[80], rstatus[80];
-    int len = snprintf(status, sizeof(status), "%.20s - %d lines",
-        E.filename ? E.filename : "[No Name]", E.numrows);
+    int len = snprintf(status, sizeof(status), "%.20s - %d lines %s",
+        E.filename ? E.filename : "[No Name]", E.numrows,
+        E.dirty ? "(modified)" : "");
     int rlen = snprintf(rstatus, sizeof(rstatus), "%d/%d", E.cy + 1, E.numrows);
     
+    if (len >= (int)sizeof(status))
+        len = sizeof(status) - 1;
+
+    if (rlen >= (int)sizeof(rstatus))
+        rlen = sizeof(rstatus) - 1;
+
     if (len > E.screencols)
         len = E.screencols;
+
+    if (rlen > E.screencols)
+        rlen = E.screencols;
+
     abAppend(ab, status, len);
     while (len < E.screencols) {
         if (E.screencols - len == rlen) {
@@ -149,7 +160,7 @@ void editorRefreshScreen(void) {
     abFree(&ab);
 }
 
-void editorSetStatusMessage(const char* fmt, ...) {
+void editorSetStatusMessage(const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
     vsnprintf(E.statusmsg, sizeof(E.statusmsg), fmt, ap);

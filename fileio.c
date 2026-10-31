@@ -6,13 +6,40 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
 
+#include "input.h"
 #include "editor.h"
 #include "errorHandler.h"
+#include "output.h"
 #include "fileio.h"
 
+static char *editorRowsToString(int *buflen) {
+    int totlen = 0;
+    int i;
 
-static void editorUpdateRow(struct erow *row) {
+    for (i = 0; i < E.numrows; i++) {
+        totlen += E.row[i].size + 1;
+    }
+    *buflen = totlen;
+
+    char *buf = malloc((size_t)(totlen + 1));
+    if (buf == NULL)
+        die("malloc");
+    char *p = buf;
+    for (i = 0; i < E.numrows; i++) {
+        memcpy(p, E.row[i].chars, E.row[i].size);
+        p += E.row[i].size;
+        *p = '\n';
+        p++;
+    }
+
+    return buf;
+}
+
+void editorUpdateRow(struct erow *row) {
     int tabs = 0;
     int j;
     for (j = 0; j < row->size; j++)
@@ -37,17 +64,20 @@ static void editorUpdateRow(struct erow *row) {
     }
     row->render[i] = '\0';
     row->rsize = i;
-
 }
 
-static void editorAppendRow(char *s, size_t len) {
+void editorInsertRow(int at, char *s, size_t len) {
+    if (at < 0 || at > E.numrows)
+        return;
+
     struct erow *new_row = realloc(E.row, sizeof(struct erow) * (E.numrows + 1));
 
     if (new_row == NULL)
         die("realloc");
     E.row = new_row;
 
-    int at = E.numrows;
+    memmove(&E.row[at + 1], &E.row[at], sizeof(struct erow) * (E.numrows - at));
+
     E.row[at].size = len;
     
     char *new_chars = malloc(len + 1);
@@ -63,6 +93,56 @@ static void editorAppendRow(char *s, size_t len) {
     editorUpdateRow(&E.row[at]);
 
     E.numrows++;
+    E.dirty++;
+}
+
+static void editorFreeRow(struct erow *row) {
+    free(row->render);
+    free(row->chars);
+}
+
+void editorDelRow(int at) {
+    if (at < 0 || at >= E.numrows)
+        return;
+    editorFreeRow(&E.row[at]);
+    memmove(&E.row[at], &E.row[at+1], sizeof(struct erow) * (E.numrows - at - 1));
+    E.numrows--;
+    E.dirty++;
+}
+
+void editorRowInsertChar(struct erow *row, int at, int c) {
+    if (at < 0 || at > row->size)
+        at = row->size;
+    char *new_chars = realloc(row->chars, row->size + 2);
+    if (new_chars == NULL)
+        die("realloc");
+    row->chars = new_chars;
+    memmove(&row->chars[at + 1], &row->chars[at], row->size - at + 1);
+    row->size++;
+    row->chars[at] = c;
+    editorUpdateRow(row);
+    E.dirty++;
+}
+
+void editorRowAppendString(struct erow *row, char *s, size_t len) {
+    char *new_chars = realloc(row->chars, row->size + len + 1);
+    if (new_chars == NULL)
+        die("realloc");
+    row->chars = new_chars;
+    memcpy(&row->chars[row->size], s, len);
+    row->size += len;
+    row->chars[row->size] = '\0';
+    editorUpdateRow(row);
+    E.dirty++;
+}
+
+void editorRowDelChar(struct erow *row, int at) {
+    if (at < 0 || at >= row->size)
+        return;
+    memmove(&row->chars[at], &row->chars[at + 1], row->size - at);
+    row->size--;
+    editorUpdateRow(row);
+    E.dirty++;
 }
 
 void editorOpen(const char *filename) {
@@ -86,7 +166,7 @@ void editorOpen(const char *filename) {
             linelen--;
         }
 
-        editorAppendRow(line, linelen);
+        editorInsertRow(E.numrows, line, linelen);
     }
     
     if (ferror(fp))
@@ -94,4 +174,36 @@ void editorOpen(const char *filename) {
 
     free(line);
     fclose(fp);
+    E.dirty = 0;
+}
+
+void editorSave(void) {
+    if (E.filename == NULL) {
+        E.filename = editorPrompt("Save as: %s (ESC to cancel)");
+        if (E.filename == NULL) {
+            editorSetStatusMessage("Save aborted");
+            return;
+        }
+    }
+
+    int len;
+    char *buf = editorRowsToString(&len);
+
+    int fd = open(E.filename, O_RDWR | O_CREAT, 0644);
+    if (fd != -1) {
+        if (ftruncate(fd, len) != -1) {
+            safe_write(fd, buf, len);
+            if (close(fd) == -1)
+                die("close");
+            free(buf);
+            E.dirty = 0;
+            editorSetStatusMessage("%d bytes written to disk", len);
+            return;
+        }
+        if (close(fd) == -1)
+            die("close");
+    }
+
+    free(buf);
+    editorSetStatusMessage("Can't save! I/O error: %s", strerror(errno));
 }

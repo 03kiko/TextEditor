@@ -2,6 +2,7 @@
 #define ERROR_HANDLER_H
 
 #include <sys/types.h>
+#include <stddef.h>
 #include <termios.h>
 
 void die(const char* s);
